@@ -18,6 +18,9 @@ import static org.junit.Assert.assertThat;
 public class BasicUsageDemo {
     private static final Logger LOGGER = LoggerFactory.getLogger(BasicUsageDemo.class);
 
+    private static final HystrixCommandGroupKey BASIC_USAGE_GROUP =
+            HystrixCommandGroupKey.Factory.asKey("BasicUsage");
+
     @Test
     public void demo_basic_usage() {
         String result = new BasicCommand("Stark").execute();
@@ -28,6 +31,11 @@ public class BasicUsageDemo {
     public void demo_enum_group_key() {
         new EnumGroup1Command().execute();
         new EnumGroup2Command().execute();
+    }
+
+    @Test
+    public void show_fallback_thread() {
+        new BasicFallbackCommand().execute();
     }
 
     public enum Groups implements HystrixCommandGroupKey {
@@ -78,6 +86,32 @@ public class BasicUsageDemo {
         @Override
         protected String run() throws Exception {
             return "Hello, " + name;
+        }
+    }
+
+    class BasicFallbackCommand extends HystrixCommand<Void> {
+        BasicFallbackCommand() {
+            super(Setter.withGroupKey(BASIC_USAGE_GROUP)
+                    .andCommandPropertiesDefaults(HystrixCommandProperties.Setter()
+                            .withFallbackIsolationSemaphoreMaxConcurrentRequests(1)
+                    ));
+        }
+
+        @Override
+        protected Void run() throws Exception {
+            LOGGER.info("Thread in run() is {}", Thread.currentThread().getName());
+            throw new RuntimeException("Cause failure");
+        }
+
+        @Override
+        protected Void getFallback() {
+            LOGGER.info("Thread in getFallback() is {}", Thread.currentThread().getName());
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                //
+            }
+            return null;
         }
     }
 }
