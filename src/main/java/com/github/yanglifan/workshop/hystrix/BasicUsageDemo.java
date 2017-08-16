@@ -9,6 +9,10 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
@@ -20,6 +24,8 @@ public class BasicUsageDemo {
 
     private static final HystrixCommandGroupKey BASIC_USAGE_GROUP =
             HystrixCommandGroupKey.Factory.asKey("BasicUsage");
+
+    private static AtomicInteger count = new AtomicInteger();
 
     @Test
     public void demo_basic_usage() {
@@ -36,6 +42,19 @@ public class BasicUsageDemo {
     @Test
     public void show_fallback_thread() {
         new BasicFallbackCommand().execute();
+    }
+
+    @Test
+    public void demo_fallback_concurrent_control() throws Exception {
+        ExecutorService executorService = Executors.newCachedThreadPool();
+        for (int i = 0; i < 5; i++) {
+            executorService.execute(() -> new BasicFallbackCommand().execute());
+        }
+
+        Thread.sleep(1000);
+
+        assertThat(count.get(), is(2)); // Since withFallbackIsolationSemaphoreMaxConcurrentRequests(2)
+        count.set(0);
     }
 
     public enum Groups implements HystrixCommandGroupKey {
@@ -93,7 +112,7 @@ public class BasicUsageDemo {
         BasicFallbackCommand() {
             super(Setter.withGroupKey(BASIC_USAGE_GROUP)
                     .andCommandPropertiesDefaults(HystrixCommandProperties.Setter()
-                            .withFallbackIsolationSemaphoreMaxConcurrentRequests(1)
+                            .withFallbackIsolationSemaphoreMaxConcurrentRequests(2)
                     ));
         }
 
@@ -107,6 +126,7 @@ public class BasicUsageDemo {
         protected Void getFallback() {
             LOGGER.info("Thread in getFallback() is {}", Thread.currentThread().getName());
             try {
+                count.getAndIncrement();
                 Thread.sleep(100);
             } catch (InterruptedException e) {
                 //
