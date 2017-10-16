@@ -5,6 +5,7 @@ import com.netflix.hystrix.HystrixCommandGroupKey;
 import com.netflix.hystrix.HystrixCommandProperties;
 import com.netflix.hystrix.HystrixThreadPoolKey;
 import com.netflix.hystrix.HystrixThreadPoolProperties;
+import com.netflix.hystrix.exception.HystrixRuntimeException;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +58,20 @@ public class BasicUsageDemo {
         count.set(0);
     }
 
+    @Test
+    public void demo_timeout_interrupt() {
+         TimeoutCommand timeoutCommand = new TimeoutCommand();
+        try {
+            timeoutCommand.execute();
+        } catch (HystrixRuntimeException e) {
+            String result = timeoutCommand.result;
+            assertThat(result, is("interrupted"));
+            return;
+        }
+
+        throw new RuntimeException("Fail");
+    }
+
     public enum Groups implements HystrixCommandGroupKey {
         GROUP_1, GROUP_2
     }
@@ -82,6 +97,28 @@ public class BasicUsageDemo {
         protected String run() throws Exception {
             LOGGER.info("Thread of Command 2: {}", Thread.currentThread().getName());
             return null;
+        }
+    }
+
+    class TimeoutCommand extends HystrixCommand<String> {
+
+        String result;
+
+        public TimeoutCommand() {
+            super(Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("MyService")));
+        }
+
+        @Override
+        protected String run() throws Exception {
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                result = "interrupted";
+                return result;
+            }
+
+            result = "success";
+            return result;
         }
     }
 
@@ -127,7 +164,7 @@ public class BasicUsageDemo {
             LOGGER.info("Thread in getFallback() is {}", Thread.currentThread().getName());
             try {
                 count.getAndIncrement();
-                Thread.sleep(100);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 //
             }
