@@ -22,10 +22,13 @@ public class MetricsDemoService {
 
     @PostConstruct
     public void init() throws InterruptedException {
+        HystrixMetricsReporter.doReport();
+
         for (int i = 0; i < 1000000; i++) {
             Thread.sleep(10);
             executorService.execute(() -> new DemoServiceCommand().execute());
         }
+
     }
 
     class DemoServiceCommand extends HystrixCommand<Void> {
@@ -40,6 +43,12 @@ public class MetricsDemoService {
         @Override
         protected Void run() throws Exception {
             MetricsDemoService.this.doService();
+            return null;
+        }
+
+        @Override
+        protected Void getFallback() {
+            // DO NOTHING
             return null;
         }
     }

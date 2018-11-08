@@ -2,6 +2,8 @@ package com.github.yanglifan.workshop.hystrix;
 
 import com.netflix.hystrix.HystrixCommandMetrics;
 
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -11,24 +13,39 @@ public class HystrixMetricsReporter {
 
     public static void doReport() {
         scheduler.scheduleAtFixedRate(() -> {
-            for (HystrixCommandMetrics commandMetrics : HystrixCommandMetrics.getInstances()) {
-                getCommendMetrics(commandMetrics);
-            }
+            SortedSet<CommandErrorPercentage> topErrorPercentages = buildCommandErrorPercentages();
+            log(topErrorPercentages);
         }, 0, 5, TimeUnit.SECONDS);
     }
 
-    private static void getCommendMetrics(HystrixCommandMetrics commandMetrics) {
-        String commandName = commandMetrics.getCommandKey().name();
-
+    private static void log(SortedSet<CommandErrorPercentage> topErrorPercentages) {
+        int i = 1;
+        System.out.println("========== Command Error Percentage List ==========");
+        for (CommandErrorPercentage errorPercentage : topErrorPercentages) {
+            System.out.println(i++ + errorPercentage.getCommandName() + ": " + errorPercentage.getErrorPercentage() + "%");
+        }
     }
 
-    class CommandErrorPercentage implements Comparable<CommandErrorPercentage> {
+    private static SortedSet<CommandErrorPercentage> buildCommandErrorPercentages() {
+        SortedSet<CommandErrorPercentage> topErrorPercentages = new TreeSet<>();
+
+        for (HystrixCommandMetrics commandMetrics : HystrixCommandMetrics.getInstances()) {
+            CommandErrorPercentage commandErrorPercentage = new CommandErrorPercentage(commandMetrics);
+            topErrorPercentages.add(commandErrorPercentage);
+        }
+
+        return topErrorPercentages;
+    }
+
+    static class CommandErrorPercentage implements Comparable<CommandErrorPercentage> {
         private String commandName;
         private Integer errorPercentage;
 
-        public CommandErrorPercentage(String commandName, Integer errorPercentage) {
-            this.commandName = commandName;
-            this.errorPercentage = errorPercentage;
+        public CommandErrorPercentage(HystrixCommandMetrics commandMetrics) {
+            this.commandName = commandMetrics.getCommandKey().name();
+
+            HystrixCommandMetrics.HealthCounts healthCounts = commandMetrics.getHealthCounts();
+            this.errorPercentage = healthCounts.getErrorPercentage();
         }
 
         public String getCommandName() {
